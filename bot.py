@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import os
+import asyncio
 
 TOKEN = os.environ.get("TOKEN")
 SALON_RESERVATIONS_ID = int(os.environ.get("SALON_RESERVATIONS_ID"))
@@ -10,6 +11,15 @@ ROLE_ADMIN_ID = int(os.environ.get("ROLE_ADMIN_ID"))
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+async def send_ephemeral_temp(interaction, message, delay=3):
+    """Envoie un message éphémère puis le supprime après X secondes"""
+    await interaction.response.send_message(message, ephemeral=True)
+    await asyncio.sleep(delay)
+    try:
+        await interaction.delete_original_response()
+    except Exception:
+        pass
 
 # ──────────────────────────────────────────────
 # MODAL : formulaire de réservation
@@ -64,13 +74,7 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
         )
         await salon.send(embed=embed, view=view)
 
-        # Message qui disparaît après 5 secondes
-        await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(
-            "✅ Ta réservation a bien été envoyée ! En attente de validation.",
-            ephemeral=True,
-            delete_after=5
-        )
+        await send_ephemeral_temp(interaction, "✅ Ta réservation a bien été envoyée ! En attente de validation.", delay=5)
 
 
 # ──────────────────────────────────────────────
@@ -105,16 +109,8 @@ class RefusModal(discord.ui.Modal, title="❌ Raison du refus"):
         self.validation_view.refuser.disabled = True
 
         await self.message_embed.edit(embed=embed, view=self.validation_view)
+        await send_ephemeral_temp(interaction, "❌ Réservation refusée.", delay=3)
 
-        # Message qui disparaît après 3 secondes
-        await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(
-            "❌ Réservation refusée.",
-            ephemeral=True,
-            delete_after=3
-        )
-
-        # DM au demandeur
         try:
             await self.demandeur.send(
                 f"❌ **Votre réservation de session a été refusée par {interaction.user.display_name}**\n\n"
@@ -145,7 +141,7 @@ class ValidationView(discord.ui.View):
     @discord.ui.button(label="✅ Accepter", style=discord.ButtonStyle.success, row=0)
     async def accepter(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True, delete_after=3)
+            await send_ephemeral_temp(interaction, "❌ Tu n'as pas la permission.", delay=3)
             return
 
         embed = interaction.message.embeds[0]
@@ -156,14 +152,7 @@ class ValidationView(discord.ui.View):
         self.refuser.disabled = True
 
         await interaction.message.edit(embed=embed, view=self)
-
-        # Message qui disparaît après 3 secondes
-        await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(
-            f"✅ Réservation acceptée ! {self.demandeur.mention} a été notifié.",
-            ephemeral=True,
-            delete_after=3
-        )
+        await send_ephemeral_temp(interaction, f"✅ Réservation acceptée ! {self.demandeur.mention} a été notifié.", delay=3)
 
         try:
             await self.demandeur.send(
@@ -178,7 +167,7 @@ class ValidationView(discord.ui.View):
     @discord.ui.button(label="❌ Refuser", style=discord.ButtonStyle.danger, row=0)
     async def refuser(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True, delete_after=3)
+            await send_ephemeral_temp(interaction, "❌ Tu n'as pas la permission.", delay=3)
             return
 
         modal = RefusModal(
