@@ -160,8 +160,8 @@ class NouvelleReservationView(discord.ui.View):
 # ──────────────────────────────────────────────
 # COMMANDE SLASH : /setup — poste le bouton permanent
 # ──────────────────────────────────────────────
-@bot.tree.command(name="setup", description="Poste le bouton de réservation dans ce salon (admin seulement)")
-async def setup(interaction: discord.Interaction):
+@bot.tree.command(name="setupresa", description="Poste le bouton de réservation dans ce salon (admin seulement)")
+async def setupresa(interaction: discord.Interaction):
     role = interaction.guild.get_role(ROLE_ADMIN_ID)
     if role not in interaction.user.roles:
         await interaction.response.send_message("❌ Réservé aux admins.", ephemeral=True)
