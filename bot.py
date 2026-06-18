@@ -1,9 +1,8 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-
-# ⚙️ CONFIG — modifie ces valeurs
 import os
+
 TOKEN = os.environ.get("TOKEN")
 SALON_RESERVATIONS_ID = int(os.environ.get("SALON_RESERVATIONS_ID"))
 ROLE_ADMIN_ID = int(os.environ.get("ROLE_ADMIN_ID"))
@@ -13,7 +12,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ──────────────────────────────────────────────
-# MODAL : fenêtre de saisie privée
+# MODAL : formulaire de réservation
 # ──────────────────────────────────────────────
 class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
 
@@ -42,23 +41,27 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
         salon = interaction.guild.get_channel(SALON_RESERVATIONS_ID)
         if salon is None:
             await interaction.response.send_message(
-                "❌ Salon de réservations introuvable. Vérifie l'ID dans le code.",
+                "❌ Salon de réservations introuvable.",
                 ephemeral=True
             )
             return
 
-        # Bloc de réservation propre
         embed = discord.Embed(
             title="📋 Nouvelle demande de réservation",
             color=discord.Color.orange()
         )
         embed.add_field(name="👤 Demandeur", value=interaction.user.mention, inline=False)
-        embed.add_field(name="📅 Date", value=self.date.value, inline=True)
-        embed.add_field(name="🕐 Sessions", value=self.sessions.value, inline=True)
-        embed.add_field(name="👥 Nombre de joueurs", value=self.joueurs.value, inline=True)
-        embed.set_footer(text="En attente de validation par un admin")
+        embed.add_field(name="📅 Date", value=self.date.value, inline=False)
+        embed.add_field(name="🕐 Sessions", value=self.sessions.value, inline=False)
+        embed.add_field(name="👥 Nombre de joueurs", value=self.joueurs.value, inline=False)
+        embed.set_footer(text="⏳ En attente de validation par un admin")
 
-        view = ValidationView(demandeur=interaction.user)
+        view = ValidationView(
+            demandeur=interaction.user,
+            date=self.date.value,
+            sessions=self.sessions.value,
+            joueurs=self.joueurs.value
+        )
         await salon.send(embed=embed, view=view)
 
         await interaction.response.send_message(
@@ -68,12 +71,62 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
 
 
 # ──────────────────────────────────────────────
-# BOUTONS : Accepter / Refuser
+# MODAL : raison du refus
+# ──────────────────────────────────────────────
+class RefusModal(discord.ui.Modal, title="❌ Raison du refus"):
+
+    raison = discord.ui.TextInput(
+        label="Raison du refus",
+        placeholder="ex: Créneau déjà pris",
+        required=True,
+        max_length=200,
+        style=discord.TextStyle.paragraph
+    )
+
+    def __init__(self, demandeur, date, sessions, joueurs, message_embed, view):
+        super().__init__()
+        self.demandeur = demandeur
+        self.date = date
+        self.sessions = sessions
+        self.joueurs = joueurs
+        self.message_embed = message_embed
+        self.validation_view = view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = self.message_embed.embeds[0]
+        embed.color = discord.Color.red()
+        embed.set_footer(text=f"❌ Refusée par {interaction.user.display_name}")
+        embed.add_field(name="❌ Raison du refus", value=self.raison.value, inline=False)
+
+        self.validation_view.accepter.disabled = True
+        self.validation_view.refuser.disabled = True
+
+        await self.message_embed.edit(embed=embed, view=self.validation_view)
+        await interaction.response.send_message("❌ Réservation refusée.", ephemeral=True)
+
+        # DM au demandeur
+        try:
+            await self.demandeur.send(
+                f"❌ **Votre réservation de session a été refusée par {interaction.user.display_name}**\n\n"
+                f"📅 Réservation du **{self.date}** aux sessions de **{self.sessions}** pour **{self.joueurs}** joueur(s)\n\n"
+                f"**Raison du refus :** {self.raison.value}\n\n"
+                f"─────────────────────\n"
+                f"*⚠️ Ce message est envoyé automatiquement, merci de ne pas y répondre, personne ne le recevra.*"
+            )
+        except Exception:
+            pass
+
+
+# ──────────────────────────────────────────────
+# BOUTONS : Accepter / Refuser / Nouvelle réservation
 # ──────────────────────────────────────────────
 class ValidationView(discord.ui.View):
-    def __init__(self, demandeur: discord.User):
+    def __init__(self, demandeur, date, sessions, joueurs):
         super().__init__(timeout=None)
         self.demandeur = demandeur
+        self.date = date
+        self.sessions = sessions
+        self.joueurs = joueurs
 
     def est_admin(self, interaction: discord.Interaction) -> bool:
         role = interaction.guild.get_role(ROLE_ADMIN_ID)
@@ -82,16 +135,13 @@ class ValidationView(discord.ui.View):
     @discord.ui.button(label="✅ Accepter", style=discord.ButtonStyle.success, row=0)
     async def accepter(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await interaction.response.send_message(
-                "❌ Tu n'as pas la permission de faire ça.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
 
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
         embed.set_footer(text=f"✅ Acceptée par {interaction.user.display_name}")
 
-        # Désactiver uniquement les boutons Accepter et Refuser, garder Nouvelle réservation
         self.accepter.disabled = True
         self.refuser.disabled = True
 
@@ -100,41 +150,31 @@ class ValidationView(discord.ui.View):
             f"✅ Réservation acceptée ! {self.demandeur.mention} a été notifié.", ephemeral=True
         )
 
-        # Notifier le demandeur en DM
         try:
             await self.demandeur.send(
-                f"✅ Ta réservation a été **acceptée** par {interaction.user.display_name} !"
+                f"✅ **Votre réservation de session a été acceptée par {interaction.user.display_name}**\n\n"
+                f"📅 Réservation du **{self.date}** aux sessions de **{self.sessions}** pour **{self.joueurs}** joueur(s)\n\n"
+                f"─────────────────────\n"
+                f"*⚠️ Ce message est envoyé automatiquement, merci de ne pas y répondre, personne ne le recevra.*"
             )
         except Exception:
-            pass  # DMs fermés
+            pass
 
     @discord.ui.button(label="❌ Refuser", style=discord.ButtonStyle.danger, row=0)
     async def refuser(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await interaction.response.send_message(
-                "❌ Tu n'as pas la permission de faire ça.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Tu n'as pas la permission.", ephemeral=True)
             return
 
-        embed = interaction.message.embeds[0]
-        embed.color = discord.Color.red()
-        embed.set_footer(text=f"❌ Refusée par {interaction.user.display_name}")
-
-        # Désactiver uniquement les boutons Accepter et Refuser, garder Nouvelle réservation
-        self.accepter.disabled = True
-        self.refuser.disabled = True
-
-        await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message(
-            f"❌ Réservation refusée.", ephemeral=True
+        modal = RefusModal(
+            demandeur=self.demandeur,
+            date=self.date,
+            sessions=self.sessions,
+            joueurs=self.joueurs,
+            message_embed=interaction.message,
+            view=self
         )
-
-        try:
-            await self.demandeur.send(
-                f"❌ Ta réservation a été **refusée** par {interaction.user.display_name}."
-            )
-        except Exception:
-            pass
+        await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="📝 Nouvelle réservation", style=discord.ButtonStyle.primary, row=0)
     async def nouvelle_reservation(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -142,7 +182,7 @@ class ValidationView(discord.ui.View):
 
 
 # ──────────────────────────────────────────────
-# BOUTON : Nouvelle réservation (message permanent)
+# BOUTON PERMANENT
 # ──────────────────────────────────────────────
 class NouvelleReservationView(discord.ui.View):
     def __init__(self):
@@ -158,9 +198,9 @@ class NouvelleReservationView(discord.ui.View):
 
 
 # ──────────────────────────────────────────────
-# COMMANDE SLASH : /setup — poste le bouton permanent
+# COMMANDE /setupresa
 # ──────────────────────────────────────────────
-@bot.tree.command(name="setupresa", description="Poste le bouton de réservation dans ce salon (admin seulement)")
+@bot.tree.command(name="setupresa", description="Poste le bouton de réservation (admin seulement)")
 async def setupresa(interaction: discord.Interaction):
     role = interaction.guild.get_role(ROLE_ADMIN_ID)
     if role not in interaction.user.roles:
