@@ -3,9 +3,10 @@ from discord.ext import commands
 from discord import app_commands
 
 # ⚙️ CONFIG — modifie ces valeurs
-TOKEN = "TON_TOKEN_ICI"
-SALON_RESERVATIONS_ID = 123456789  # ID du salon où le bot poste les réservations
-ROLE_ADMIN_ID = 987654321          # ID du rôle admin qui peut accepter/refuser
+import os
+TOKEN = os.environ.get("TOKEN")
+SALON_RESERVATIONS_ID = int(os.environ.get("SALON_RESERVATIONS_ID"))
+ROLE_ADMIN_ID = int(os.environ.get("ROLE_ADMIN_ID"))
 
 intents = discord.Intents.default()
 intents.message_content = True
