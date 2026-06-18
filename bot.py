@@ -181,9 +181,9 @@ async def setupresa(interaction: discord.Interaction):
 # ──────────────────────────────────────────────
 @bot.event
 async def on_ready():
-    # Re-enregistre la vue persistante au redémarrage
     bot.add_view(NouvelleReservationView())
-    await bot.tree.sync()
+    synced = await bot.tree.sync()
     print(f"✅ Bot connecté en tant que {bot.user}")
+    print(f"✅ {len(synced)} commandes synchronisées")
 
 bot.run(TOKEN)
