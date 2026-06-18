@@ -20,6 +20,49 @@ async def send_ephemeral_temp(interaction, message, delay=3):
     except Exception:
         pass
 
+def mp_accepte(admin_name, date, sessions, joueurs):
+    return (
+        "```\n"
+        "╔══════════════════════════════╗\n"
+        "║   ✅  RÉSERVATION ACCEPTÉE   ║\n"
+        "╚══════════════════════════════╝\n"
+        "\n"
+        f"  👤 Acceptée par : {admin_name}\n"
+        "\n"
+        f"  📅 Date         : {date}\n"
+        f"  🕐 Sessions     : {sessions}\n"
+        f"  👥 Joueurs      : {joueurs}\n"
+        "\n"
+        "══════════════════════════════\n"
+        "  ⚠️  Message automatique\n"
+        "  Merci de ne pas répondre,\n"
+        "  personne ne le recevra.\n"
+        "```"
+    )
+
+def mp_refuse(admin_name, date, sessions, joueurs, raison):
+    return (
+        "```\n"
+        "╔══════════════════════════════╗\n"
+        "║   ❌  RÉSERVATION REFUSÉE    ║\n"
+        "╚══════════════════════════════╝\n"
+        "\n"
+        f"  👤 Refusée par  : {admin_name}\n"
+        "\n"
+        f"  📅 Date         : {date}\n"
+        f"  🕐 Sessions     : {sessions}\n"
+        f"  👥 Joueurs      : {joueurs}\n"
+        "\n"
+        "──────────────────────────────\n"
+        f"  ❌ Raison : {raison}\n"
+        "\n"
+        "══════════════════════════════\n"
+        "  ⚠️  Message automatique\n"
+        "  Merci de ne pas répondre,\n"
+        "  personne ne le recevra.\n"
+        "```"
+    )
+
 # ──────────────────────────────────────────────
 # MODAL : formulaire de réservation
 # ──────────────────────────────────────────────
@@ -103,19 +146,18 @@ class RefusModal(discord.ui.Modal, title="❌ Raison du refus"):
         embed.set_footer(text=f"❌ — REFUSÉE PAR {interaction.user.display_name.upper()} —")
         embed.add_field(name="❌ Raison du refus", value=self.raison.value, inline=False)
 
-        # Remplace les boutons par uniquement "Nouvelle réservation"
         new_view = SeulementNouvelleReservationView()
         await self.message_embed.edit(embed=embed, view=new_view)
         await send_ephemeral_temp(interaction, "❌ Réservation refusée.", delay=3)
 
         try:
-            await self.demandeur.send(
-                f"❌ **Votre réservation de session a été refusée par {interaction.user.display_name}**\n\n"
-                f"📅 Réservation du **{self.date}** aux sessions de **{self.sessions}** pour **{self.joueurs}** joueur(s)\n\n"
-                f"**Raison du refus :** {self.raison.value}\n\n"
-                f"─────────────────────\n"
-                f"*⚠️ Ce message est envoyé automatiquement, merci de ne pas y répondre, personne ne le recevra.*"
-            )
+            await self.demandeur.send(mp_refuse(
+                interaction.user.display_name,
+                self.date,
+                self.sessions,
+                self.joueurs,
+                self.raison.value
+            ))
         except Exception:
             pass
 
@@ -157,18 +199,17 @@ class ValidationView(discord.ui.View):
         embed.color = discord.Color.green()
         embed.set_footer(text=f"✅ — ACCEPTÉE PAR {interaction.user.display_name.upper()} —")
 
-        # Remplace les boutons par uniquement "Nouvelle réservation"
         new_view = SeulementNouvelleReservationView()
         await interaction.message.edit(embed=embed, view=new_view)
-        await send_ephemeral_temp(interaction, f"✅ Réservation acceptée ! {self.demandeur.mention} a été notifié.", delay=3)
+        await send_ephemeral_temp(interaction, f"✅ Réservation acceptée !", delay=3)
 
         try:
-            await self.demandeur.send(
-                f"✅ **Votre réservation de session a été acceptée par {interaction.user.display_name}**\n\n"
-                f"📅 Réservation du **{self.date}** aux sessions de **{self.sessions}** pour **{self.joueurs}** joueur(s)\n\n"
-                f"─────────────────────\n"
-                f"*⚠️ Ce message est envoyé automatiquement, merci de ne pas y répondre, personne ne le recevra.*"
-            )
+            await self.demandeur.send(mp_accepte(
+                interaction.user.display_name,
+                self.date,
+                self.sessions,
+                self.joueurs
+            ))
         except Exception:
             pass
 
