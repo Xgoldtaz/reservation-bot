@@ -72,7 +72,7 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
             joueurs=self.joueurs.value
         )
         await salon.send(embed=embed, view=view)
-        await send_ephemeral_temp(interaction, "✅ Ta réservation a bien été envoyée ! En attente de validation.", delay=5)
+        await interaction.response.defer(ephemeral=True)
 
 
 # ──────────────────────────────────────────────
@@ -150,7 +150,7 @@ class ValidationView(discord.ui.View):
     @discord.ui.button(label="✅ Accepter", style=discord.ButtonStyle.success, row=0)
     async def accepter(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await send_ephemeral_temp(interaction, "❌ Tu n'as pas la permission.", delay=3)
+            await send_ephemeral_temp(interaction, "🚫 Accès refusé.", delay=3)
             return
 
         embed = interaction.message.embeds[0]
@@ -175,7 +175,7 @@ class ValidationView(discord.ui.View):
     @discord.ui.button(label="❌ Refuser", style=discord.ButtonStyle.danger, row=0)
     async def refuser(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.est_admin(interaction):
-            await send_ephemeral_temp(interaction, "❌ Tu n'as pas la permission.", delay=3)
+            await send_ephemeral_temp(interaction, "🚫 Accès refusé.", delay=3)
             return
 
         modal = RefusModal(
