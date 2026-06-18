@@ -13,7 +13,6 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 async def send_ephemeral_temp(interaction, message, delay=3):
-    """Envoie un message éphémère puis le supprime après X secondes"""
     await interaction.response.send_message(message, ephemeral=True)
     await asyncio.sleep(delay)
     try:
@@ -64,7 +63,7 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
         embed.add_field(name="📅 Date", value=self.date.value, inline=False)
         embed.add_field(name="🕐 Sessions", value=self.sessions.value, inline=False)
         embed.add_field(name="👥 Nombre de joueurs", value=self.joueurs.value, inline=False)
-        embed.set_footer(text="⏳ En attente de validation par un admin")
+        embed.set_footer(text="⏳ — EN ATTENTE DE VALIDATION PAR UN ADMIN —")
 
         view = ValidationView(
             demandeur=interaction.user,
@@ -73,7 +72,6 @@ class ReservationModal(discord.ui.Modal, title="📅 Nouvelle Réservation"):
             joueurs=self.joueurs.value
         )
         await salon.send(embed=embed, view=view)
-
         await send_ephemeral_temp(interaction, "✅ Ta réservation a bien été envoyée ! En attente de validation.", delay=5)
 
 
@@ -102,13 +100,12 @@ class RefusModal(discord.ui.Modal, title="❌ Raison du refus"):
     async def on_submit(self, interaction: discord.Interaction):
         embed = self.message_embed.embeds[0]
         embed.color = discord.Color.red()
-        embed.set_footer(text=f"❌ Refusée par {interaction.user.display_name}")
+        embed.set_footer(text=f"❌ — REFUSÉE PAR {interaction.user.display_name.upper()} —")
         embed.add_field(name="❌ Raison du refus", value=self.raison.value, inline=False)
 
-        self.validation_view.accepter.disabled = True
-        self.validation_view.refuser.disabled = True
-
-        await self.message_embed.edit(embed=embed, view=self.validation_view)
+        # Remplace les boutons par uniquement "Nouvelle réservation"
+        new_view = SeulementNouvelleReservationView()
+        await self.message_embed.edit(embed=embed, view=new_view)
         await send_ephemeral_temp(interaction, "❌ Réservation refusée.", delay=3)
 
         try:
@@ -121,6 +118,18 @@ class RefusModal(discord.ui.Modal, title="❌ Raison du refus"):
             )
         except Exception:
             pass
+
+
+# ──────────────────────────────────────────────
+# VUE : uniquement le bouton Nouvelle réservation
+# ──────────────────────────────────────────────
+class SeulementNouvelleReservationView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="📝 Nouvelle réservation", style=discord.ButtonStyle.primary, row=0)
+    async def nouvelle_reservation(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ReservationModal())
 
 
 # ──────────────────────────────────────────────
@@ -146,12 +155,11 @@ class ValidationView(discord.ui.View):
 
         embed = interaction.message.embeds[0]
         embed.color = discord.Color.green()
-        embed.set_footer(text=f"✅ Acceptée par {interaction.user.display_name}")
+        embed.set_footer(text=f"✅ — ACCEPTÉE PAR {interaction.user.display_name.upper()} —")
 
-        self.accepter.disabled = True
-        self.refuser.disabled = True
-
-        await interaction.message.edit(embed=embed, view=self)
+        # Remplace les boutons par uniquement "Nouvelle réservation"
+        new_view = SeulementNouvelleReservationView()
+        await interaction.message.edit(embed=embed, view=new_view)
         await send_ephemeral_temp(interaction, f"✅ Réservation acceptée ! {self.demandeur.mention} a été notifié.", delay=3)
 
         try:
